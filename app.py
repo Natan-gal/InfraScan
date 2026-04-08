@@ -456,8 +456,8 @@ def get_recent_scans():
     # Sort by scan_timestamp descending, newest first
     scans.sort(key=lambda s: s['scan_timestamp'], reverse=True)
 
-    # Return only the 50 most recent
-    return jsonify({'scans': scans[:50]})
+    # Return only the 500 most recent
+    return jsonify({'scans': scans[:500]})
 
 @app.route('/api/feedback', methods=['POST'])
 def submit_feedback():
