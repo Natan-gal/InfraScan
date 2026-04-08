@@ -18,6 +18,9 @@ function initApp() {
     const mainContainer = document.querySelector('.container');
     const scrollTopBtn = document.getElementById('scroll-to-top');
     const landingInfo = document.querySelector('.landing-info');
+    const branchSelectionContainer = document.getElementById('branch-selection-container');
+    const branchSelect = document.getElementById('branch-select');
+    const repoLoader = document.getElementById('repo-loader');
 
     // Feedback Elements
     const feedbackModal = document.getElementById('feedback-modal');
@@ -286,12 +289,71 @@ function initApp() {
             },
             body: JSON.stringify({
                 url,
+                branch: (branchSelectionContainer && !branchSelectionContainer.classList.contains('hidden')) ? branchSelect.value : 'main',
                 scanner: scannerTypeSelect ? scannerTypeSelect.value : 'comprehensive',
                 recipient,
                 is_private: isPrivate
             })
         });
     });
+
+    // Branch Fetching Logic
+    let lastFetchedUrl = '';
+    let fetchBranchesTimeout = null;
+
+    repoUrlInput.addEventListener('input', () => {
+        const url = repoUrlInput.value.trim();
+        if (url === lastFetchedUrl) return;
+
+        if (fetchBranchesTimeout) clearTimeout(fetchBranchesTimeout);
+        fetchBranchesTimeout = setTimeout(() => {
+            fetchBranches(url);
+        }, 1000);
+    });
+
+    // Also fetch on blur to be sure
+    repoUrlInput.addEventListener('blur', () => {
+        const url = repoUrlInput.value.trim();
+        if (url !== lastFetchedUrl) {
+            if (fetchBranchesTimeout) clearTimeout(fetchBranchesTimeout);
+            fetchBranches(url);
+        }
+    });
+
+    async function fetchBranches(url) {
+        if (!url || (!url.startsWith('http') && !url.includes('git@'))) {
+            if (branchSelectionContainer) branchSelectionContainer.classList.add('hidden');
+            return;
+        }
+
+        lastFetchedUrl = url;
+        if (repoLoader) repoLoader.classList.remove('hidden');
+        if (branchSelectionContainer) branchSelectionContainer.classList.add('hidden');
+
+        try {
+            const response = await fetch('/api/repo/branches', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url })
+            });
+
+            if (!response.ok) throw new Error('Failed to fetch branches');
+
+            const data = await response.json();
+            if (data.branches && data.branches.length > 0) {
+                if (branchSelect) {
+                    branchSelect.innerHTML = data.branches.map(b => `<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+                }
+                if (branchSelectionContainer) branchSelectionContainer.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Error fetching branches:', error);
+            // Fallback: hide branch selection on error
+            if (branchSelectionContainer) branchSelectionContainer.classList.add('hidden');
+        } finally {
+            if (repoLoader) repoLoader.classList.add('hidden');
+        }
+    }
 
     // Share Results
     shareBtn.addEventListener('click', async () => {
@@ -732,6 +794,7 @@ function initApp() {
             </div>
             <div class="scan-history-meta">
                 <span class="scan-date">🕐 ${escapeHtml(scan.scan_timestamp)}</span>
+                ${scan.branch ? `<span class="scan-branch"><svg style="display:inline-block;vertical-align:text-bottom;margin-right:4px;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>${escapeHtml(scan.branch)}</span>` : ''}
                 <span class="scan-type">🔬 ${escapeHtml(formatScannerName(scan.scanner_type))}</span>
                 <span class="scan-findings">⚠️ ${scan.total_findings} findings</span>
                 ${recipientBadge}
@@ -769,6 +832,12 @@ function initApp() {
                         <div class="metadata-item">
                             <span class="metadata-label">Scanned:</span>
                             <span class="metadata-value">${escapeHtml(metadata.scan_timestamp)}</span>
+                        </div>
+                        ` : ''}
+                        ${metadata.branch ? `
+                        <div class="metadata-item">
+                            <span class="metadata-label"><svg style="display:inline-block;vertical-align:text-bottom;margin-right:4px;opacity:0.7;" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg> Branch:</span>
+                            <span class="metadata-value">${escapeHtml(metadata.branch)}</span>
                         </div>
                         ` : ''}
                         ${metadata.resource_count ? `

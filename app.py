@@ -9,7 +9,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 from urllib.parse import urlparse
 import requests
 from dotenv import load_dotenv
-from git import Repo
+from git import Repo, cmd
 from scanner.parser import scan_directory, get_container_scanner, is_container_scanner_available
 from scanner.checkov_scanner import is_checkov_available
 from scanner.docker_scout_scanner import is_docker_scout_available
@@ -110,10 +110,50 @@ def scanner_status():
         'comprehensive': checkov_available or container_scanner_available  # Can run comprehensive if any security scanner available
     })
 
+@app.route('/api/repo/branches', methods=['POST'])
+def get_branches():
+    """Fetch branches for a given repository URL."""
+    data = request.get_json()
+    repo_url = data.get('url')
+    
+    if not repo_url:
+        return jsonify({'error': 'No URL provided'}), 400
+    
+    # Strip query parameters and hash fragments from URL
+    repo_url = repo_url.split('?')[0].split('#')[0]
+    
+    try:
+        g = cmd.Git()
+        # ls-remote --heads returns lines like "hash\trefs/heads/branchname"
+        output = g.ls_remote('--heads', repo_url)
+        branches = []
+        for line in output.splitlines():
+            if '\trefs/heads/' in line:
+                branches.append(line.split('\trefs/heads/')[-1])
+        
+        # Sort branches, but keep 'main' or 'master' at the top if they exist
+        if branches:
+            branches.sort()
+            for primary in ['main', 'master']:
+                if primary in branches:
+                    branches.remove(primary)
+                    branches.insert(0, primary)
+        else:
+            # If no heads found, return common defaults as a fallback
+            branches = ['main', 'master']
+            
+        return jsonify({'branches': branches})
+    except Exception as e:
+        error_msg = str(e).lower()
+        if 'could not read' in error_msg or 'not found' in error_msg or 'does not exist' in error_msg:
+             return jsonify({'error': 'Unable to access repository. Please verify the URL.'}), 400
+        return jsonify({'error': f'Failed to fetch branches: {str(e)}'}), 500
+
 @app.route('/api/scan/github', methods=['POST'])
 def scan_github():
     data = request.get_json()
     repo_url = data.get('url')
+    branch = data.get('branch', 'main')  # Default to main if not provided
     scanner_type = data.get('scanner', 'regex')  # Default to regex scanner
 
     is_private = data.get('is_private', False)  # Optional private scan flag
@@ -157,11 +197,21 @@ def scan_github():
             nonlocal clone_error
             try:
                 # Shallow clone - only latest commit to reduce size and time
-                Repo.clone_from(repo_url, temp_dir, depth=1)
+                # Use specified branch
+                Repo.clone_from(repo_url, temp_dir, branch=branch, depth=1)
                 clone_success.set()
             except Exception as e:
-                clone_error = e
-                clone_success.set()
+                # If specified branch fails (e.g. 'main' doesn't exist and we defaulted to it)
+                # try to clone without branch (gets default branch)
+                try:
+                    # Clean temp_dir and retry without branch
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    os.makedirs(temp_dir, exist_ok=True)
+                    Repo.clone_from(repo_url, temp_dir, depth=1)
+                    clone_success.set()
+                except Exception as retry_error:
+                    clone_error = retry_error
+                    clone_success.set()
         
         # Start clone in separate thread
         clone_thread = Thread(target=clone_repo)
@@ -208,7 +258,8 @@ def scan_github():
             'repository_name': repo_name,
 
             'scan_timestamp': scan_timestamp,
-            'is_private': is_private
+            'is_private': is_private,
+            'branch': branch
         })
 
         # Send Slack notification if enabled
@@ -388,7 +439,7 @@ def get_recent_scans():
                 'id': result_id,
                 'repository_url': repo_url,
                 'repository_name': metadata.get('repository_name') or repo_url.rstrip('/').split('/')[-1],
-
+                'branch': metadata.get('branch'),
                 'scan_timestamp': scan_timestamp,
                 'scanner_type': data.get('summary', {}).get('scanner_used', '') if data.get('summary') else '',
                 'total_findings': data.get('summary', {}).get('total', 0) if data.get('summary') else 0,

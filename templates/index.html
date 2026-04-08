@@ -79,6 +79,15 @@
                     <div class="input-group">
                         <label for="repo-url">GitHub Repository URL</label>
                         <input type="text" id="repo-url" placeholder="https://github.com/username/repo">
+                        <div id="repo-loader" class="repo-loader hidden">
+                            <div class="mini-spinner"></div>
+                            <span>Fetching branches...</span>
+                        </div>
+                    </div>
+
+                    <div class="input-group hidden" id="branch-selection-container">
+                        <label for="branch-select">Select Branch</label>
+                        <select id="branch-select"></select>
                     </div>
 
 
@@ -338,7 +347,7 @@
                     <div class="loading-content">
                         <h2 id="loading-title">Analyzing Infrastructure</h2>
                         <p id="loading-status">Connecting to repository...</p>
-                        
+
                         <div class="progress-bar-container">
                             <div id="progress-bar-fill" class="progress-bar-fill"></div>
                         </div>
