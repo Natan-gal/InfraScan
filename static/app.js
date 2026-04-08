@@ -51,6 +51,10 @@ function initApp() {
     let recentScansCurrentPage = 1;
     const recentScansPageSize = 5;
 
+    let progressInterval = null;
+    let lastFetchedUrl = '';
+    let fetchBranchesTimeout = null;
+
     // Check for CLI Injected Data (Standalone HTML Report)
     if (window.CLI_INJECTED_DATA || window.CLI_INJECTED_DATA_B64) {
         let data = null;
@@ -298,8 +302,6 @@ function initApp() {
     });
 
     // Branch Fetching Logic
-    let lastFetchedUrl = '';
-    let fetchBranchesTimeout = null;
 
     repoUrlInput.addEventListener('input', () => {
         const url = repoUrlInput.value.trim();
@@ -443,7 +445,7 @@ function initApp() {
         });
     }
 
-    let progressInterval = null;
+
 
     function resetScanProgress() {
         if (progressInterval) clearInterval(progressInterval);
