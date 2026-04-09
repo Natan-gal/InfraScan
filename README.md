@@ -62,6 +62,7 @@ InfraScan provides two modes for command‑line operation:
 
 * **Standalone Python script** (after cloning the repo or installing dependencies). Run `python3 cli.py [options]` from the project root or install a virtual environment.
 * **Docker image** – the preferred way for CI/CD; the official image `soldevelo/infrascan` bundles all dependencies and scanners. **New in v1.0.4**: The CLI now provides a beautiful, colored findings summary directly in your CI/CD logs, even when generating HTML or JSON reports, so you can see results immediately without downloading artifacts.
+* **Detailed Guide**: See [docs/PIPELINE_INTEGRATION.md](./docs/PIPELINE_INTEGRATION.md) for best practices and a gradual rollout strategy.
 
 > The container also installs a helper binary called `infrascan`, so if you use the image directly as your pipeline container (e.g. Bitbucket/GitLab), you can invoke the scanner without wrapping it in `docker run`.
 

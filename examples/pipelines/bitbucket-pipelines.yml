@@ -1,0 +1,34 @@
+# Example Bitbucket Pipelines configuration for InfraScan
+# Copy this to your bitbucket-pipelines.yml
+#
+# This configuration runs a comprehensive scan on every push.
+# It is set to 'Monitoring Mode' (won't fail the build).
+# To enable 'Enforcement Mode', add --fail-on high_critical to the infrascan command.
+
+image: python:3.9
+
+pipelines:
+  default:
+    - step:
+        name: InfraScan Audit
+        services:
+          - docker
+        script:
+          # Create artifacts directory
+          - mkdir -p infrascan-reports
+          
+          # Run InfraScan via Docker
+          # Using the official image is recommended as it has all scanners pre-installed
+          - docker run --rm 
+              -v $(pwd):/scan 
+              soldevelo/infrascan:latest 
+              --scanner comprehensive 
+              --format html 
+              --out /scan/infrascan-reports/report.html
+              
+          # Optional: Use --fail-on to break the build if issues are found
+          # - docker run ... --fail-on high_critical
+          
+        artifacts:
+          # This ensures the report is saved and viewable in the 'Artifacts' tab
+          - infrascan-reports/**
