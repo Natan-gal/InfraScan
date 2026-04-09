@@ -14,8 +14,9 @@ pipelines:
         services:
           - docker
         script:
-          # Create artifacts directory
+          # Create artifacts directory with write permissions for the container
           - mkdir -p infrascan-reports
+          - chmod 777 infrascan-reports
           
           # Run InfraScan via Docker
           # Using the official image is recommended as it has all scanners pre-installed

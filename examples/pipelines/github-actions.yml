@@ -19,7 +19,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Create Reports Directory
-        run: mkdir -p infrascan-reports
+        run: |
+          mkdir -p infrascan-reports
+          chmod 777 infrascan-reports
 
       - name: Run InfraScan
         run: |
