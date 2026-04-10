@@ -18,7 +18,7 @@ from scanner.parser import scan_directory
 from reporter.grading import ReportGenerator
 from reporter.html_generator import generate_standalone_html
 
-__version__ = "1.0.4"
+__version__ = "1.0.5-beta"
 
 # Setup basic logging
 logging.basicConfig(level=logging.ERROR, format='%(levelname)s: %(message)s')
@@ -64,6 +64,13 @@ def setup_args():
         "--download-external-modules",
         action="store_true",
         help="Allow Checkov to download external modules (Terraform/etc)"
+    )
+
+    parser.add_argument(
+        "--framework",
+        default="auto",
+        choices=["auto", "terraform", "kubernetes", "cloudformation", "helm"],
+        help="IaC framework type (default: auto-detect)"
     )
     
     parser.add_argument(
@@ -253,6 +260,7 @@ def main():
         results, resource_count, recommendations = scan_directory(
             target_path, 
             scanner_type=args.scanner,
+            framework=args.framework,
             download_external_modules=args.download_external_modules
         )
         

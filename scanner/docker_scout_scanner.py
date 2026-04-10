@@ -18,7 +18,13 @@ import subprocess
 from typing import List, Dict, Any, Tuple, Optional
 
 
-from scanner.image_utils import find_compose_files, extract_images_from_compose, perform_all_logins
+from scanner.image_utils import (
+    find_compose_files, 
+    extract_images_from_compose, 
+    find_kubernetes_files,
+    extract_images_from_kubernetes,
+    perform_all_logins
+)
 
 # ============================================================================
 # Utility Functions
@@ -268,19 +274,27 @@ def run_docker_scout_scan(directory_path: str) -> Tuple[List[Dict[str, Any]], Li
     
     # Find Docker Compose files
     compose_files = find_compose_files(directory_path)
+    # Find Kubernetes files
+    k8s_files = find_kubernetes_files(directory_path)
     
-    if not compose_files:
+    if not compose_files and not k8s_files:
         return findings, extra_recommendations, False
     
-    print(f"Found {len(compose_files)} Docker Compose file(s) to scan")
+    print(f"Found {len(compose_files)} Docker Compose file(s) and {len(k8s_files)} Kubernetes file(s) to scan")
     
-    # Collect ALL images from ALL compose files first
-    all_images_map = {} # image -> compose_file
+    # Collect ALL images from ALL files first
+    all_images_map = {} # image -> source_file
     for compose_file in compose_files:
         images = extract_images_from_compose(compose_file)
         for image in images:
             if image not in all_images_map:
                 all_images_map[image] = compose_file
+                
+    for k8s_file in k8s_files:
+        images = extract_images_from_kubernetes(k8s_file)
+        for image in images:
+            if image not in all_images_map:
+                all_images_map[image] = k8s_file
     
     # Authenticate with registries (collecting all unique images first)
     if all_images_map:

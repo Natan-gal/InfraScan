@@ -10,7 +10,13 @@ import os
 import subprocess
 from typing import List, Dict, Any
 
-from scanner.image_utils import find_compose_files, extract_images_from_compose, perform_all_logins
+from scanner.image_utils import (
+    find_compose_files, 
+    extract_images_from_compose, 
+    find_kubernetes_files,
+    extract_images_from_kubernetes,
+    perform_all_logins
+)
 
 # Check if Grype is available
 def is_grype_available() -> bool:
@@ -46,17 +52,25 @@ def run_grype_scan(directory_path: str) -> List[Dict[str, Any]]:
     
     # Find Docker Compose files
     compose_files = find_compose_files(directory_path)
+    # Find Kubernetes files
+    k8s_files = find_kubernetes_files(directory_path)
     
-    if not compose_files:
+    if not compose_files and not k8s_files:
         return findings
     
-    # Collect ALL images from ALL compose files first
-    all_images_map = {} # image -> compose_file
+    # Collect ALL images from ALL files first
+    all_images_map = {} # image -> source_file
     for compose_file in compose_files:
         images = extract_images_from_compose(compose_file)
         for image in images:
             if image not in all_images_map:
                 all_images_map[image] = compose_file
+                
+    for k8s_file in k8s_files:
+        images = extract_images_from_kubernetes(k8s_file)
+        for image in images:
+            if image not in all_images_map:
+                all_images_map[image] = k8s_file
                 
     # Perform logins for ECR/Docker Hub if needed
     if all_images_map:

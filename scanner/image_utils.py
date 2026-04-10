@@ -15,6 +15,26 @@ def find_compose_files(directory_path: str) -> List[str]:
     
     return compose_files
 
+def find_kubernetes_files(directory_path: str) -> List[str]:
+    """Find Kubernetes manifest files in the directory."""
+    k8s_files = []
+    
+    for root, dirs, files in os.walk(directory_path):
+        for file in files:
+            if file.endswith(('.yml', '.yaml')):
+                full_path = os.path.join(root, file)
+                try:
+                    # Quick check if it's likely a K8s file without full parsing
+                    with open(full_path, 'r', encoding='utf-8') as f:
+                        # Read first 1024 bytes and check for common K8s indicators
+                        head = f.read(1024)
+                        if 'apiVersion:' in head and 'kind:' in head:
+                            k8s_files.append(full_path)
+                except Exception:
+                    continue
+                    
+    return k8s_files
+
 def extract_images_from_compose(compose_file: str) -> List[str]:
     """Extract Docker image names from a compose file with environment variable expansion."""
     images = []
@@ -43,6 +63,36 @@ def extract_images_from_compose(compose_file: str) -> List[str]:
                     images.append(expanded_image)
     except Exception as e:
         print(f"Warning: Could not parse {compose_file}: {e}")
+    
+    return images
+
+def extract_images_from_kubernetes(k8s_file: str) -> List[str]:
+    """Extract Docker image names from a Kubernetes manifest file."""
+    images = []
+    
+    try:
+        import yaml
+        with open(k8s_file, 'r') as f:
+            # K8s files can have multiple documents separated by ---
+            docs = yaml.safe_load_all(f)
+            for doc in docs:
+                if not doc or not isinstance(doc, dict):
+                    continue
+                
+                # Recursive function to find 'image' keys in any container spec
+                def find_images(obj):
+                    if isinstance(obj, dict):
+                        if 'image' in obj and isinstance(obj['image'], str):
+                            images.append(obj['image'])
+                        for v in obj.values():
+                            find_images(v)
+                    elif isinstance(obj, list):
+                        for item in obj:
+                            find_images(item)
+                
+                find_images(doc)
+    except Exception as e:
+        print(f"Warning: Could not parse {k8s_file}: {e}")
     
     return images
 

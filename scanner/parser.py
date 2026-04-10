@@ -18,6 +18,44 @@ def is_container_scanner_available():
     else:  # docker-scout (default)
         return is_docker_scout_available()
 
+def detect_framework(path: str) -> str:
+    """
+    Detect the IaC framework used in the directory.
+    
+    Returns:
+    - 'terraform' (default)
+    - 'kubernetes'
+    - 'cloudformation'
+    - 'helm'
+    """
+    tf_files = 0
+    k8s_files = 0
+    cfn_files = 0
+    
+    for root, dirs, files in os.walk(path):
+        for file in files:
+            if file.endswith('.tf'):
+                tf_files += 1
+            elif file.endswith(('.yml', '.yaml')):
+                # Check file content for better detection
+                try:
+                    full_path = os.path.join(root, file)
+                    with open(full_path, 'r', encoding='utf-8') as f:
+                        head = f.read(1024)
+                        if 'apiVersion:' in head and 'kind:' in head:
+                            k8s_files += 1
+                        elif 'AWSTemplateFormatVersion' in head:
+                            cfn_files += 1
+                except Exception:
+                    continue
+    
+    if k8s_files > tf_files and k8s_files > cfn_files:
+        return 'kubernetes'
+    if cfn_files > tf_files:
+        return 'cloudformation'
+    
+    return 'terraform'
+
 def count_resources(path, framework='terraform'):
     """
     Count total resources in IaC files.
@@ -45,6 +83,19 @@ def count_resources(path, framework='terraform'):
                             resource_count += len(matches)
                     except Exception:
                         continue
+    elif framework == 'kubernetes':
+        from scanner.image_utils import find_kubernetes_files
+        k8s_files = find_kubernetes_files(path)
+        for k8s_file in k8s_files:
+            try:
+                import yaml
+                with open(k8s_file, 'r', encoding='utf-8') as f:
+                    docs = yaml.safe_load_all(f)
+                    for doc in docs:
+                        if doc and isinstance(doc, dict) and 'kind' in doc:
+                            resource_count += 1
+            except Exception:
+                continue
     
     return resource_count
 
@@ -59,7 +110,7 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
             - 'containers': Container vulnerability scanning only (Docker Scout or Grype)
             - 'checkov': Checkov IaC security only
             - 'comprehensive': All scanners (regex + Checkov + containers)
-        framework: IaC framework type (terraform, cloudformation, etc.)
+        framework: IaC framework type (terraform, kubernetes, cloudformation, auto)
         download_external_modules: Whether to download external modules
     
     Returns:
@@ -88,6 +139,11 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
     # Use set to avoid duplicates
     active_scanners = set(normalized_scanners)
     
+    # Auto-detect framework if needed
+    if framework == 'auto' or not framework:
+        framework = detect_framework(path)
+        print(f"Detected framework: {framework}")
+
     # Count resources for reporting
     resource_count = count_resources(path, framework)
     

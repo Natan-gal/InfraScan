@@ -2,7 +2,7 @@
 
 **Open Source IaC Cost & Security Scanner**
 
-InfraScan analyzes Infrastructure as Code to identify cost antipatterns and security issues before deployment. It can be used via a friendly web UI, a standalone Python CLI or as an all‑in‑one Docker image that also exposes a simple `infrascan` executable for pipeline usage.
+InfraScan analyzes Infrastructure as Code to identify cost antipatterns and security issues before deployment. It supports **Terraform**, **Kubernetes manifests**, **CloudFormation**, **Helm**, and **Dockerfiles**. It can be used via a friendly web UI, a standalone Python CLI or as an all‑in‑one Docker image that also exposes a simple `infrascan` executable for pipeline usage.
 
 ## 📦 Installation
 
@@ -89,6 +89,12 @@ docker run --rm -v $(pwd):/scan soldevelo/infrascan --fail-on grade_c
 
 # Fail CI if overall grade is F
 docker run --rm -v $(pwd):/scan soldevelo/infrascan --fail-on grade_f
+
+# Scan a Kubernetes project (auto-detected)
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --scanner comprehensive
+
+# Explicitly specify Kubernetes framework
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --scanner comprehensive
 ```
 
 **CLI Arguments:**
@@ -96,6 +102,7 @@ docker run --rm -v $(pwd):/scan soldevelo/infrascan --fail-on grade_f
 - `--scanner`: `regex`, `checkov`, `containers`, `comprehensive` (default: `comprehensive`). You can combine multiple scanners using comma (e.g. `--scanner regex,containers`).
 - `--format`: `text`, `json`, or `html` — standalone interactive HTML report (default: `text`)
 - `--out`: Path where output file is saved (e.g. `/scan/report.html`)
+- `--framework`: `auto`, `terraform`, `kubernetes`, `cloudformation`, `helm` (default: `auto`). When set to `auto`, InfraScan detects the framework automatically based on file contents.
 - `--download-external-modules`: Allow Checkov to download external modules (Terraform/etc)
 - `--fail-on`: Exit code 1 when: `any` findings, `high_critical` findings, specific grade threshold (`grade_a` through `grade_f`), or priority threshold (`priority_critical` through `priority_info`). Fails if the result matches or is worse than the specified criteria.
 
@@ -184,9 +191,34 @@ pipelines:
 > ```
 
 
+## ☸️ Kubernetes Support
+
+InfraScan natively supports **Kubernetes manifest files** (`.yml`/`.yaml`). When Kubernetes manifests are detected (files containing `apiVersion` and `kind`), InfraScan will:
+
+- **Auto-detect the framework**: If your project contains more K8s manifests than Terraform files, InfraScan will automatically switch to Kubernetes mode. You can also force it with `--framework kubernetes`.
+- **Security scanning (Checkov)**: Runs Kubernetes-specific Checkov rules (CKV_K8S_*) to detect misconfigurations such as running as root, missing resource limits, missing network policies, missing probes, etc.
+- **Container vulnerability scanning**: Extracts all `image:` references from your Kubernetes manifests (Deployments, StatefulSets, DaemonSets, Pods, Jobs, CronJobs — any resource with container specs) and scans them for CVE vulnerabilities using Docker Scout or Grype.
+- **Multi-document support**: Files with multiple YAML documents separated by `---` are fully supported.
+
+**Example — scanning a Kubernetes project:**
+```bash
+# Auto-detected
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --scanner comprehensive
+
+# Explicit framework
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --scanner comprehensive
+
+# Security checks only
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --scanner checkov
+
+# Container CVE scan only
+docker run --rm -v $(pwd):/scan soldevelo/infrascan --framework kubernetes --scanner containers
+```
+
 ## 🐳 Advanced Container Scanning
 
 InfraScan supports advanced container scanning features:
+- **Image discovery**: Images are automatically extracted from **Docker Compose files** (`docker-compose.yml`, `compose.yaml`) **and Kubernetes manifests** (`Deployment`, `StatefulSet`, `Pod`, etc.).
 - **Environment Variables**: You can use variables in your `docker-compose.yml` image names (e.g., `image: ${REGISTRY}/my-app:${TAG}`). Both `$VAR` and `${VAR:-default}` syntax are supported. Variables are expanded using the environment where InfraScan is running (including your `.env` file).
 - **Private Registries**:
   - **Docker Hub**: Set `DOCKER_HUB_USERNAME` and `DOCKER_HUB_PASSWORD` in your environment or `.env` file for automatic authentication.
@@ -262,7 +294,8 @@ However, the biggest cloud savings often come from architectural changes, reserv
 
 Contributions welcome! Focus areas:
 - Additional cost optimization patterns
-- Support for more IaC frameworks
+- Kubernetes-specific cost rules
+- Support for more IaC frameworks (Pulumi, Crossplane)
 - Performance improvements
 
 ## 💬 Community

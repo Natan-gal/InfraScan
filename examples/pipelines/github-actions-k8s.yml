@@ -1,0 +1,44 @@
+# Example GitHub Actions workflow for comprehensive infrastructure scanning with InfraScan
+# Copy this to .github/workflows/infrascan-comprehensive.yml
+#
+# This workflow runs InfraScan on all infrastructure files in the repository (Kubernetes YAMLs, Terraform, Docker, etc.).
+# It assumes manifests are in the root or subdirectories.
+# Set to 'Monitoring Mode' (won't fail the build).
+# To enable 'Enforcement Mode', add --fail-on high_critical to the infrascan command.
+
+name: InfraScan Comprehensive Audit
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  infrascan-k8s:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create Reports Directory
+        run: |
+          mkdir -p infrascan-reports
+          chmod 777 infrascan-reports
+
+      - name: Run InfraScan on Kubernetes YAMLs
+        run: |
+          docker run --rm \
+            -w /scan \
+            -v ${{ github.workspace }}:/scan \
+            soldevelo/infrascan:1.0.5-beta \
+            --scanner comprehensive \
+            --format html \
+            --out /scan/infrascan-reports/report.html \
+            /scan
+            
+      - name: Upload InfraScan Report
+        uses: actions/upload-artifact@v4
+        if: always() # Upload report even if the scan step fails
+        with:
+          name: infrascan-k8s-report
+          path: infrascan-reports/report.html
+          retention-days: 14

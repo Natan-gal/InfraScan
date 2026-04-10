@@ -1,6 +1,6 @@
 # CI/CD Pipeline Integration Guide
 
-This guide explains how to integrate InfraScan into your CI/CD pipelines to improve your infrastructure's cost efficiency and security without disrupting your development workflow.
+This guide explains how to integrate InfraScan into your CI/CD pipelines to improve your infrastructure's cost efficiency and security without disrupting your development workflow. InfraScan supports **Terraform**, **Kubernetes**, **CloudFormation**, and **Helm** projects.
 
 > 💡 **Ready-to-use Templates**: You can find pre-configured pipeline files in the [examples/pipelines](../examples/pipelines) directory. You can copy these directly into your project to get started in seconds.
 
@@ -99,4 +99,59 @@ jobs:
 ## 💡 Pro Tips
 *   **Console Visibility:** InfraScan v1.0.4+ prints a colored summary directly to the terminal. You don't always need to download the HTML report to see what's wrong.
 *   **Selective Scanners:** If you only care about costs, use `--scanner regex`. If you only care about security, use `--scanner checkov`.
+*   **Kubernetes Projects:** InfraScan auto-detects Kubernetes manifests. If your repo contains K8s YAML files alongside Terraform, you can force the framework with `--framework kubernetes`.
 *   **Ignore False Positives:** Use standard Checkov inline comments (e.g., `#checkov:skip=CKV_AWS_1:Reason`) to skip specific security checks that are intentional in your environment.
+
+---
+
+## ☸️ Kubernetes-Specific Integration
+
+For projects using **Kubernetes manifests** (Deployments, StatefulSets, Services, etc.) instead of Docker Compose:
+
+### What InfraScan scans in K8s projects:
+1. **Security misconfigurations** (via Checkov): running as root, missing resource limits, missing probes, network policies, etc.
+2. **Container vulnerabilities** (via Docker Scout/Grype): all `image:` references from your manifests are extracted and scanned for CVEs.
+
+### Example — Bitbucket Pipeline for Kubernetes project
+```yaml
+pipelines:
+  default:
+    - step:
+        name: InfraScan K8s Audit
+        services:
+          - docker
+        script:
+          - mkdir -p infrascan-reports && chmod 777 infrascan-reports
+          - docker run --rm
+              -v $(pwd):/scan
+              soldevelo/infrascan:latest
+              --framework kubernetes
+              --scanner comprehensive
+              --format html
+              --out /scan/infrascan-reports/report.html
+        artifacts:
+          - infrascan-reports/**
+```
+
+### Example — GitHub Actions for Kubernetes project
+```yaml
+jobs:
+  infrascan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run K8s Scan
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/scan \
+            soldevelo/infrascan:latest \
+            --framework kubernetes \
+            --scanner comprehensive \
+            --format html \
+            --out /scan/report.html
+      - name: Upload Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: infrascan-report
+          path: report.html
+```
