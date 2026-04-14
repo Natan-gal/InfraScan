@@ -25,15 +25,12 @@ jobs:
           chmod 777 infrascan-reports
 
       - name: Run InfraScan on Kubernetes YAMLs
-        run: |
-          docker run --rm \
-            -w /scan \
-            -v ${{ github.workspace }}:/scan \
-            soldevelo/infrascan:latest \
-            --scanner comprehensive \
-            --format html \
-            --out /scan/infrascan-reports/report.html \
-            /scan
+        uses: soldevelo/infrascan@v1.0.5
+        with:
+          scanner: comprehensive
+          framework: kubernetes
+          format: html
+          out: infrascan-reports/report.html
             
       - name: Upload InfraScan Report
         uses: actions/upload-artifact@v4

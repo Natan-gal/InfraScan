@@ -85,9 +85,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run Scan
-        run: |
-          docker run --rm -v ${{ github.workspace }}:/scan \
-            soldevelo/infrascan:latest --format html --out /scan/report.html
+        uses: soldevelo/infrascan@v1.0.5
+        with:
+          format: html
+          out: report.html
       - name: Upload Report
         uses: actions/upload-artifact@v4
         if: always()
@@ -141,13 +142,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run K8s Scan
-        run: |
-          docker run --rm -v ${{ github.workspace }}:/scan \
-            soldevelo/infrascan:latest \
-            --framework kubernetes \
-            --scanner comprehensive \
-            --format html \
-            --out /scan/report.html
+        uses: soldevelo/infrascan@v1.0.5
+        with:
+          framework: kubernetes
+          scanner: comprehensive
+          format: html
+          out: report.html
       - name: Upload Report
         uses: actions/upload-artifact@v4
         if: always()
