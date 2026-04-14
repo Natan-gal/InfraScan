@@ -39,7 +39,7 @@ runs:
     - name: Run InfraScan
       shell: bash
       run: |
-        CMD=(docker run --rm -v "${{ github.workspace }}:/scan" "soldevelo/infrascan:latest" cli "/scan/${{ inputs.directory }}")
+        CMD=(docker run --rm --user root -v "${{ github.workspace }}:/scan" "soldevelo/infrascan:latest" cli "/scan/${{ inputs.directory }}")
 
         CMD+=(--scanner "${{ inputs.scanner }}")
         CMD+=(--format "${{ inputs.format }}")
