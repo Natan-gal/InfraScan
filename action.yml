@@ -47,6 +47,12 @@ runs:
 
         if [ -n "${{ inputs.out }}" ]; then
           CMD+=(--out "/scan/${{ inputs.out }}")
+        elif [ "${{ inputs.format }}" = "html" ]; then
+          CMD+=(--out "/scan/infrascan-report.html")
+          echo "Notice: Format is HTML but no 'out' file specified. Defaulting to infrascan-report.html"
+        elif [ "${{ inputs.format }}" = "json" ]; then
+          CMD+=(--out "/scan/infrascan-report.json")
+          echo "Notice: Format is JSON but no 'out' file specified. Defaulting to infrascan-report.json"
         fi
 
         if [ "${{ inputs.download-external-modules }}" = "true" ]; then
