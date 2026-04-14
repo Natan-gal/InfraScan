@@ -125,14 +125,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run InfraScan
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/scan \
-            soldevelo/infrascan:latest \
-            --scanner comprehensive \
-            --format html \
-            --out /scan/infrascan-report.html \
-            --fail-on high_critical
+        uses: soldevelo/infrascan@v1.0.5
+        with:
+          scanner: comprehensive
+          format: html
+          out: infrascan-report.html
+          fail-on: high_critical
 
       - name: Upload HTML Report
         uses: actions/upload-artifact@v4

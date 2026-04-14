@@ -1,0 +1,62 @@
+name: 'InfraScan'
+description: 'Open Source IaC Cost & Security Scanner'
+author: 'SolDevelo'
+branding:
+  icon: 'shield'
+  color: 'blue'
+inputs:
+  directory:
+    description: 'Directory to scan (relative to repository root)'
+    required: false
+    default: '.'
+  scanner:
+    description: 'Scanner to use (regex, checkov, containers, comprehensive)'
+    required: false
+    default: 'comprehensive'
+  format:
+    description: 'Output format (text, json, html)'
+    required: false
+    default: 'text'
+  out:
+    description: 'Output file path (e.g., infrascan-report.html)'
+    required: false
+    default: ''
+  framework:
+    description: 'Framework (auto, terraform, kubernetes, cloudformation, helm)'
+    required: false
+    default: 'auto'
+  download-external-modules:
+    description: 'Allow Checkov to download external modules'
+    required: false
+    default: 'false'
+  fail-on:
+    description: 'Fail threshold (e.g., high_critical, any, grade_c)'
+    required: false
+    default: ''
+runs:
+  using: 'composite'
+  steps:
+    - name: Run InfraScan
+      shell: bash
+      run: |
+        CMD=(docker run --rm -v "${{ github.workspace }}:/scan" "soldevelo/infrascan:latest" cli "/scan/${{ inputs.directory }}")
+
+        CMD+=(--scanner "${{ inputs.scanner }}")
+        CMD+=(--format "${{ inputs.format }}")
+        CMD+=(--framework "${{ inputs.framework }}")
+
+        if [ -n "${{ inputs.out }}" ]; then
+          CMD+=(--out "/scan/${{ inputs.out }}")
+        fi
+
+        if [ "${{ inputs.download-external-modules }}" = "true" ]; then
+          CMD+=(--download-external-modules)
+        fi
+
+        if [ -n "${{ inputs.fail-on }}" ]; then
+          CMD+=(--fail-on "${{ inputs.fail-on }}")
+        fi
+
+        echo "Running InfraScan:"
+        echo "${CMD[*]}"
+        "${CMD[@]}"
