@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+Allow: /api/
 
 Sitemap: https://infrascan.soldevelo.com/sitemap.xml
+
