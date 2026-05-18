@@ -1424,19 +1424,19 @@ function initApp() {
                 : ''
             }
 
-            ${gradeReport.cost?.violations > 0
-                ? renderGradeCard('Cost Optimization', gradeReport.cost, '💰')
-                : ''
+           ${gradeReport.cost
+             ? renderGradeCard('Cost Optimization', gradeReport.cost, '💰')
+            : ''
             }
 
-            ${gradeReport.security?.violations > 0
-                ? renderGradeCard('IaC Security', gradeReport.security, '🔒')
-                : ''
+            ${gradeReport.security
+            ? renderGradeCard('IaC Security', gradeReport.security, '🔒')
+            : ''
             }
 
-            ${gradeReport.container?.violations > 0
-                ? renderGradeCard('Container Security', gradeReport.container, '🐳')
-                : ''
+            ${gradeReport.container
+            ? renderGradeCard('Container Security', gradeReport.container, '🐳')
+            : ''
             }
             </div>
                 ${recommendations.length > 0 ? `
