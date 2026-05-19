@@ -18,6 +18,18 @@ from dotenv import load_dotenv
 from scanner.parser import scan_directory
 from reporter.grading import ReportGenerator
 from reporter.html_generator import generate_standalone_html
+from datetime import datetime
+
+
+def log_with_timestamp(message: str) -> None:
+    """
+    Print message prefixed with current timestamp.
+
+    Example:
+    [2026-10-10 16:23:34] Starting scan...
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{timestamp}] {message}", flush=True)
 
 __version__ = "1.0.6"
 
@@ -282,27 +294,38 @@ def should_fail(args, report_dict, results):
 def main():
     load_dotenv()
     args = setup_args()
-    
+
     target_path = os.path.abspath(args.path)
-    
+
     if not os.path.exists(target_path):
         print(f"Error: Path '{target_path}' does not exist.", file=sys.stderr)
         sys.exit(1)
-        
+
     try:
         if args.format == 'text':
-            print(f"Analyzing {target_path} with '{args.scanner}' scanner...")
-            
+            log_with_timestamp(
+                f"Analyzing {target_path} with '{args.scanner}' scanner..."
+            )
+
         # Run Scanners
+        log_with_timestamp("Starting directory scan")
+
         results, resource_count, recommendations = scan_directory(
-            target_path, 
+            target_path,
             scanner_type=args.scanner,
             framework=args.framework,
             download_external_modules=args.download_external_modules,
             included_paths=args.include
         )
-        
+
+        log_with_timestamp(
+            f"Directory scan completed. Found {len(results)} findings "
+            f"in {resource_count} resources."
+        )
+
         # Generate Report
+        log_with_timestamp("Generating report")
+
         report_generator = ReportGenerator()
         report = report_generator.generate_report(
             findings=results,
@@ -310,16 +333,20 @@ def main():
             scanner_type=args.scanner,
             extra_recommendations=recommendations
         )
-        
+
+        log_with_timestamp("Report generation completed")
+
         report_dict = report.to_dict()
         report_dict['results'] = results
         report_dict['summary'] = {
             'total': len(results),
             'scanner_used': args.scanner
         }
-        
+
         # Output Results to file/stdout
         if args.out:
+            log_with_timestamp(f"Saving report to {args.out}")
+
             if args.format == 'json':
                 with open(args.out, 'w') as f:
                     json.dump(report_dict, f, indent=2)
@@ -327,46 +354,62 @@ def main():
                 html_output = generate_standalone_html(report_dict)
                 with open(args.out, 'w', encoding='utf-8') as f:
                     f.write(html_output)
-            else: # text format
-                # Default behavior for text mode with --out is to save JSON results
+            else:
                 with open(args.out, 'w') as f:
                     json.dump(report_dict, f, indent=2)
 
-        # Handle console output
+        # Console output
         if args.format == 'json' and not args.out:
             print(json.dumps(report_dict, indent=2))
         elif args.format == 'html' and not args.out:
             print(generate_standalone_html(report_dict))
         else:
-            # If format is text OR if output is saved to record/html/json
-            # always show the text summary in the console
             print_text_report(report_dict, resource_count, args.scanner)
             if args.out:
-                 print(f"{Fore.GREEN}[v] Full {args.format.upper()} report saved to: {Fore.WHITE}{args.out}")
-            
-        # Send Slack notification if configured
+                print(
+                    f"{Fore.GREEN}[v] Full {args.format.upper()} "
+                    f"report saved to: {Fore.WHITE}{args.out}"
+                )
+
+        # Slack notification
         webhook_url = os.getenv('SLACK_WEBHOOK_URL', '').strip()
         if webhook_url:
+            log_with_timestamp("Sending Slack notification")
+
             overall = report_dict.get('overall', {})
             cost = report_dict.get('cost', {})
             security = report_dict.get('security', {})
             container = report_dict.get('container', {})
 
             total_findings = len(results)
-            overall_grade = overall.get('letter', '?') if overall else '?'
-            overall_pct = overall.get('percentage', 0) if overall else 0
+            overall_grade = overall.get('letter', '?')
+            overall_pct = overall.get('percentage', 0)
 
-            grades_parts = [f"Overall {overall_grade} ({overall_pct}%)"] 
+            grades_parts = [f"Overall {overall_grade} ({overall_pct}%)"]
+
             if cost and cost.get('max_score', 0) > 0:
-                grades_parts.append(f"Cost {cost.get('letter','?')} ({cost.get('percentage',0)}%)")
+                grades_parts.append(
+                    f"Cost {cost.get('letter', '?')} "
+                    f"({cost.get('percentage', 0)}%)"
+                )
+
             if security and security.get('max_score', 0) > 0:
-                grades_parts.append(f"Security {security.get('letter','?')} ({security.get('percentage',0)}%)")
+                grades_parts.append(
+                    f"Security {security.get('letter', '?')} "
+                    f"({security.get('percentage', 0)}%)"
+                )
+
             if container and container.get('max_score', 0) > 0:
-                grades_parts.append(f"Containers {container.get('letter','?')} ({container.get('percentage',0)}%)")
+                grades_parts.append(
+                    f"Containers {container.get('letter', '?')} "
+                    f"({container.get('percentage', 0)}%)"
+                )
+
             grades_summary = " | ".join(grades_parts)
 
             ctx = build_gh_actions_context()
             lines = ["🤖 InfraScan used in *GitHub Actions*"]
+
             if ctx['repo']:
                 lines.append(f"Repo: *{ctx['repo']}*")
             if ctx['branch']:
@@ -375,25 +418,30 @@ def main():
                 lines.append(f"Workflow: _{ctx['workflow']}_")
             if ctx['actor']:
                 lines.append(f"Triggered by: {ctx['actor']}")
+
             lines.append(f"Grades: {grades_summary}")
             lines.append(f"Findings: {total_findings} | Scanner: {args.scanner}")
+
             if ctx['run_url']:
                 lines.append(f"<{ctx['run_url']}|View run>")
 
             send_slack_notification(" | ".join(lines))
 
         # Determine Exit Code
+        log_with_timestamp("Evaluating fail conditions")
+
         if should_fail(args, report_dict, results):
             sys.exit(1)
-            
+
+        log_with_timestamp("InfraScan completed successfully")
         sys.exit(0)
-        
+
     except Exception as e:
+        log_with_timestamp(f"ERROR: {e}")
         print(f"An error occurred during scanning: {e}", file=sys.stderr)
+
         if logging.getLogger().isEnabledFor(logging.DEBUG):
             import traceback
             traceback.print_exc()
-        sys.exit(1)
 
-if __name__ == "__main__":
-    main()
+        sys.exit(1)
