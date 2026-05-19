@@ -17,6 +17,7 @@ WORKDIR /opt/infrascan
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
+    unzip \
     ca-certificates \
     gnupg \
     lsb-release \
@@ -25,6 +26,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
     && apt-get update \
     && apt-get install -y --no-install-recommends docker-ce-cli \
+    && curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
+    && unzip awscliv2.zip \
+    && rm awscliv2.zip \
+    && mv aws /aws \
+    && /aws/install \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
