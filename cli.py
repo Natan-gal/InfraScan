@@ -22,7 +22,13 @@ from reporter.html_generator import generate_standalone_html
 __version__ = "1.0.6"
 
 # Setup basic logging
-logging.basicConfig(level=logging.ERROR, format='%(levelname)s: %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+logger = logging.getLogger(__name__)
 
 def send_slack_notification(message: str) -> None:
     """Send a Slack notification via webhook URL from environment variable."""
@@ -32,9 +38,9 @@ def send_slack_notification(message: str) -> None:
     try:
         response = requests.post(webhook_url, json={'text': message}, timeout=5)
         if response.status_code >= 400:
-            print(f"Slack notification failed: {response.status_code} - {response.text}", file=sys.stderr)
+            logger.error(f"Slack notification failed: {response.status_code} - {response.text}")
     except Exception as e:
-        print(f"Slack notification error: {e}", file=sys.stderr)
+        logger.error(f"Slack notification error: {e}")
 
 def build_gh_actions_context() -> dict:
     """Extract GitHub Actions context from environment variables."""
@@ -57,39 +63,39 @@ def setup_args():
     parser = argparse.ArgumentParser(
         description="InfraScan CLI - Open Source IaC Cost & Security Scanner"
     )
-    
+
     parser.add_argument(
         "path",
         nargs="?",
         default="/scan",
         help="Path to the directory to scan (default: /scan when using Docker, or '.' for local use)"
     )
-    
+
     parser.add_argument(
         "--scanner",
         default="comprehensive",
         help="Scanner type(s) to run (default: comprehensive). Support multiple scanners separated by comma (e.g., 'regex,containers'). Options: regex, checkov, containers, comprehensive"
     )
-    
+
     parser.add_argument(
         "--format",
         choices=["text", "json", "html"],
         default="text",
         help="Output format (default: text)"
     )
-    
+
     parser.add_argument(
         "--out",
         help="File path to save JSON output explicitly (e.g., infrascan-report.json)"
     )
-    
+
     parser.add_argument(
         "--fail-on",
         choices=["any", "high_critical", "grade_a", "grade_b", "grade_c", "grade_d", "grade_f",
                  "priority_critical", "priority_high", "priority_medium", "priority_low", "priority_info"],
         help="Exit with error code 1 if findings match criteria (any findings, high/critical findings, grade threshold, or priority threshold)"
     )
-    
+
     parser.add_argument(
         "--download-external-modules",
         action="store_true",
@@ -109,39 +115,39 @@ def setup_args():
         dest="include",
         help="Select specific files or directories to scan. Can be used multiple times."
     )
-    
+
     parser.add_argument(
         "--version",
         action="version",
         version=f"InfraScan v{__version__}",
         help="Show version information and exit"
     )
-    
+
     return parser.parse_args()
 
 def print_text_report(report_dict, resource_count, scanner_type):
     # Initialize colorama
     init(autoreset=True)
-    
+
     overall = report_dict.get('overall', {})
     findings_dict = report_dict.get('findings', {})
     results = findings_dict.get('all', report_dict.get('results', []))
-    
+
     # Header
     print(f"\n{Fore.CYAN}{Style.BRIGHT}{'=' * 60}")
     print(f"{Fore.CYAN}{Style.BRIGHT} InfraScan Report - {scanner_type.upper()} SCAN")
     print(f"{Fore.CYAN}{Style.BRIGHT}{'=' * 60}")
-    
+
     # Summary Info
     target_path = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('--') else '.')
     print(f"{Style.BRIGHT}Path Scanned      :{Style.RESET_ALL} {target_path}")
     print(f"{Style.BRIGHT}Resources Found   :{Style.RESET_ALL} {resource_count}")
     print(f"{Style.BRIGHT}Total Findings    :{Style.RESET_ALL} {len(results)}")
-    
+
     # Grades Section
     print(f"\n{Style.BRIGHT}GRADING SUMMARY:")
     print(f"{'-' * 30}")
-    
+
     def get_grade_color(letter):
         if letter == 'A': return Fore.GREEN
         if letter == 'B': return Fore.GREEN
@@ -152,11 +158,11 @@ def print_text_report(report_dict, resource_count, scanner_type):
     def print_grade_line(name, grade):
         if not grade or (grade.get('max_score', 0) == 0 and grade.get('letter') != 'A'):
             return
-        
+
         letter = grade.get('letter', '?')
         percentage = grade.get('percentage', 0)
         color = get_grade_color(letter)
-        
+
         breakdown = grade.get('severity_breakdown', {})
         counts = [
             f"{Fore.RED}Crit:{breakdown.get('critical', 0)}{Style.RESET_ALL}",
@@ -168,13 +174,13 @@ def print_text_report(report_dict, resource_count, scanner_type):
         print(f"{name:18}: {color}{Style.BRIGHT}{letter}{Style.RESET_ALL} ({percentage}%){br_str}")
 
     print_grade_line("Overall Health", overall)
-    
+
     if scanner_type in ['regex', 'comprehensive']:
         print_grade_line("Cost Efficiency", report_dict.get('cost'))
-        
+
     if scanner_type in ['checkov', 'comprehensive']:
         print_grade_line("IaC Security", report_dict.get('security'))
-        
+
     if scanner_type in ['containers', 'comprehensive']:
         print_grade_line("Container Security", report_dict.get('container'))
 
@@ -184,12 +190,12 @@ def print_text_report(report_dict, resource_count, scanner_type):
         print(f"\n{Fore.GREEN}{Style.BRIGHT}RECOMMENDATIONS:")
         for rec in recs:
             print(f"  {Fore.GREEN}• {Style.BRIGHT}{rec}")
-    
+
     # Findings Details
     if results:
         print(f"\n{Style.BRIGHT}FINDINGS DETAILS:")
         print(f"{'=' * 60}")
-        
+
         # Categorize findings
         categories = []
         if findings_dict.get('cost'):
@@ -198,97 +204,86 @@ def print_text_report(report_dict, resource_count, scanner_type):
             categories.append(('IaC Security', findings_dict['security']))
         if findings_dict.get('container'):
             categories.append(('Container Security', findings_dict['container']))
-            
+
         if not categories:
             categories = [('General Findings', results)]
 
         for cat_name, cat_findings in categories:
             if not cat_findings:
                 continue
-            
+
             print(f"\n{Style.BRIGHT}>>> {cat_name} ({len(cat_findings)})")
-            
+
             # Limit display to 40 findings to avoid overwhelming CI logs
             display_limit = 40
             for i, res in enumerate(cat_findings):
                 if i >= display_limit:
                     print(f"\n      {Fore.YELLOW}... and {len(cat_findings) - display_limit} more findings (see full report for details)")
                     break
-                    
+
                 severity = res.get('severity', 'UNKNOWN').upper()
                 sev_color = Fore.WHITE
                 if severity == 'CRITICAL': sev_color = Fore.RED + Style.BRIGHT
                 elif severity == 'HIGH': sev_color = Fore.RED
                 elif severity == 'MEDIUM': sev_color = Fore.YELLOW
                 elif severity == 'LOW': sev_color = Fore.CYAN
-                
+
                 rule_id = res.get('rule_id', 'N/A')
                 file_path = res.get('file', 'Unknown')
                 line_str = f":{res.get('line')}" if res.get('line') else ""
-                
+
                 print(f"  {sev_color}[{severity}]{Style.RESET_ALL} {Style.BRIGHT}{rule_id}{Style.RESET_ALL}: {res.get('description', '')}")
                 print(f"      {Fore.WHITE}at {file_path}{line_str}{Style.RESET_ALL}")
                 if res.get('resource'):
                     print(f"      {Fore.WHITE}resource: {res.get('resource')}{Style.RESET_ALL}")
-    
+
     print(f"\n{Fore.CYAN}{Style.BRIGHT}{'=' * 60}\n")
 
 
 def should_fail(args, report_dict, results):
     if not args.fail_on:
         return False
-        
+
     if args.fail_on == 'any' and len(results) > 0:
         print("\n[ERROR] Build failed: Findings detected and --fail-on=any specified.", file=sys.stderr)
         return True
-        
+
     if args.fail_on == 'high_critical':
         critical_high_count = sum(1 for r in results if r.get('severity', '').lower() in ['critical', 'high'])
         if critical_high_count > 0:
             print(f"\n[ERROR] Build failed: {critical_high_count} high/critical findings detected and --fail-on=high_critical specified.", file=sys.stderr)
             return True
-            
+
     if args.fail_on.startswith('grade_'):
         grade_order = ['A', 'B', 'C', 'D', 'F']
         fail_grade = args.fail_on.split('_')[1].upper()
         overall_letter = report_dict.get('overall', {}).get('letter', 'A')
-        
+
         try:
             fail_idx = grade_order.index(fail_grade)
             current_idx = grade_order.index(overall_letter)
-            
+
             if current_idx >= fail_idx:
                 print(f"\n[ERROR] Build failed: Overall grade is {overall_letter} and --fail-on={args.fail_on} specified (threshold: {fail_grade} or worse).", file=sys.stderr)
                 return True
         except ValueError:
             pass # Should not happen due to argparse choices
-            
+
     if args.fail_on.startswith('priority_'):
         severity_weights = {'critical': 4, 'high': 3, 'medium': 2, 'low': 1, 'info': 0.5}
         fail_priority = args.fail_on.split('_')[1]
         threshold_weight = severity_weights.get(fail_priority, 0)
-        
+
         findings_at_or_above = [
-            r for r in results 
+            r for r in results
             if severity_weights.get(r.get('severity', 'info').lower(), 0.5) >= threshold_weight
         ]
-        
+
         if findings_at_or_above:
             print(f"\n[ERROR] Build failed: {len(findings_at_or_above)} findings with priority {fail_priority} or higher detected and --fail-on={args.fail_on} specified.", file=sys.stderr)
             return True
-            
+
     return False
-
-def log_with_timestamp(message: str) -> None:
-    """
-    Log message with current timestamp using the logging module.
-
-    Example:
-    [2026-10-10 16:23:34] Starting scan...
-    """
-    from datetime import datetime
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{timestamp}] {message}", flush=True)
 
 def main():
     load_dotenv()
@@ -297,17 +292,17 @@ def main():
     target_path = os.path.abspath(args.path)
 
     if not os.path.exists(target_path):
-        print(f"Error: Path '{target_path}' does not exist.", file=sys.stderr)
+        logger.error(f"Path '{target_path}' does not exist.")
         sys.exit(1)
 
     try:
         if args.format == 'text':
-            log_with_timestamp(
+            logger.info(
                 f"Analyzing {target_path} with '{args.scanner}' scanner..."
             )
 
         # Run Scanners
-        log_with_timestamp("Starting directory scan")
+        logger.info("Starting directory scan")
 
         results, resource_count, recommendations = scan_directory(
             target_path,
@@ -317,13 +312,13 @@ def main():
             included_paths=args.include
         )
 
-        log_with_timestamp(
+        logger.info(
             f"Directory scan completed. Found {len(results)} findings "
             f"in {resource_count} resources."
         )
 
         # Generate Report
-        log_with_timestamp("Generating report")
+        logger.info("Generating report")
 
         report_generator = ReportGenerator()
         report = report_generator.generate_report(
@@ -333,7 +328,7 @@ def main():
             extra_recommendations=recommendations
         )
 
-        log_with_timestamp("Report generation completed")
+        logger.info("Report generation completed")
 
         report_dict = report.to_dict()
         report_dict['results'] = results
@@ -344,7 +339,7 @@ def main():
 
         # Output Results to file/stdout
         if args.out:
-            log_with_timestamp(f"Saving report to {args.out}")
+            logger.info(f"Saving report to {args.out}")
 
             if args.format == 'json':
                 with open(args.out, 'w') as f:
@@ -373,7 +368,7 @@ def main():
         # Slack notification
         webhook_url = os.getenv('SLACK_WEBHOOK_URL', '').strip()
         if webhook_url:
-            log_with_timestamp("Sending Slack notification")
+            logger.info("Sending Slack notification")
 
             overall = report_dict.get('overall', {})
             cost = report_dict.get('cost', {})
@@ -427,17 +422,16 @@ def main():
             send_slack_notification(" | ".join(lines))
 
         # Determine Exit Code
-        log_with_timestamp("Evaluating fail conditions")
+        logger.info("Evaluating fail conditions")
 
         if should_fail(args, report_dict, results):
             sys.exit(1)
 
-        log_with_timestamp("InfraScan completed successfully")
+        logger.info("InfraScan completed successfully")
         sys.exit(0)
 
     except Exception as e:
-        log_with_timestamp(f"ERROR: {e}")
-        print(f"An error occurred during scanning: {e}", file=sys.stderr)
+        logger.error(f"ERROR: {e}")
 
         if logging.getLogger().isEnabledFor(logging.DEBUG):
             import traceback
