@@ -18,18 +18,6 @@ from dotenv import load_dotenv
 from scanner.parser import scan_directory
 from reporter.grading import ReportGenerator
 from reporter.html_generator import generate_standalone_html
-from datetime import datetime
-
-
-def log_with_timestamp(message: str) -> None:
-    """
-    Print message prefixed with current timestamp.
-
-    Example:
-    [2026-10-10 16:23:34] Starting scan...
-    """
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{timestamp}] {message}", flush=True)
 
 __version__ = "1.0.6"
 
@@ -291,6 +279,17 @@ def should_fail(args, report_dict, results):
             
     return False
 
+def log_with_timestamp(message: str) -> None:
+    """
+    Log message with current timestamp using the logging module.
+
+    Example:
+    [2026-10-10 16:23:34] Starting scan...
+    """
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{timestamp}] {message}", flush=True)
+
 def main():
     load_dotenv()
     args = setup_args()
@@ -445,3 +444,6 @@ def main():
             traceback.print_exc()
 
         sys.exit(1)
+
+if __name__ == "__main__":
+    main()
