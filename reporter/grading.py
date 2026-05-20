@@ -301,37 +301,52 @@ class ReportGenerator:
         self.calculator = calculator or GradeCalculator()
     
     def generate_report(self,
-                       findings: List[Dict[str, Any]],
-                       resource_count: int = 0,
-                       scanner_type: str = 'comprehensive',
-                       extra_recommendations: List[str] = None) -> ScanReport:
-        """
-        Generate complete scan report.
+                   findings: List[Dict[str, Any]],
+                   resource_count: int = 0,
+                   scanner_type: str = 'comprehensive',
+                   extra_recommendations: List[str] = None) -> ScanReport:
+    """
+    Generate complete scan report.
+    
+    Args:
+        findings: All scan findings
+        resource_count: Number of resources scanned
+        scanner_type: Type of scanner used
+        extra_recommendations: Additional recommendations to include
         
-        Args:
-            findings: All scan findings
-            resource_count: Number of resources scanned
-            scanner_type: Type of scanner used
-            extra_recommendations: Additional recommendations to include
-            
-        Returns:
-            Complete ScanReport object
-        """
-        # Separate findings by scanner type
-        cost_findings = [f for f in findings if f.get('scanner') == 'regex']
-        security_findings = [f for f in findings if f.get('scanner') == 'checkov']
-        container_findings = [f for f in findings if f.get('scanner') in ['docker-scout', 'grype']]
+    Returns:
+        Complete ScanReport object
+    """
+    # Separate findings by scanner type
+    cost_findings = [f for f in findings if f.get('scanner') == 'regex']
+    security_findings = [f for f in findings if f.get('scanner') == 'checkov']
+    container_findings = [f for f in findings if f.get('scanner') in ['docker-scout', 'grype']]
 
-        # For security and container, score only the most severe finding per resource
-        security_scoring_findings = self._most_severe_per_resource(security_findings)
-        
-        # For containers, group by image (not by file) for better aggregation
-        container_scoring_findings = self._most_severe_per_container_image(container_findings)
+    # For security and container, score only the most severe finding per resource
+    security_scoring_findings = self._most_severe_per_resource(security_findings)
+    
+    # For containers, group by image (not by file) for better aggregation
+    container_scoring_findings = self._most_severe_per_container_image(container_findings)
 
-        # Calculate individual grades
+    # ========== CRITICAL FIX ==========
+    # Only generate grades for scanners that were ACTUALLY USED (have findings)
+    # Determine which scanners ran based on scanner_type parameter
+    scanner_types = [s.strip() for s in scanner_type.split(',')]
+    is_comprehensive = scanner_type in ['comprehensive', 'both', 'all']
+    
+    # Determine which scanners should run based on scanner_type
+    should_calc_cost = is_comprehensive or 'regex' in scanner_types
+    should_calc_security = is_comprehensive or 'checkov' in scanner_types
+    should_calc_container = is_comprehensive or 'containers' in scanner_types or 'docker-scout' in scanner_types or 'grype' in scanner_types
+    
+    # Calculate individual grades ONLY if scanner was requested AND has findings
+    if should_calc_cost and cost_findings:
         cost_grade = self.calculator.calculate_grade(cost_findings, resource_count)
-
-        # Security uses resource-based max score to avoid overweighting many checks per resource
+    else:
+        cost_grade = None  # Mark as skipped scanner
+    
+    # Security uses resource-based max score to avoid overweighting many checks per resource
+    if should_calc_security and security_findings:
         max_severity_weight = max(self.calculator.severity_weights.values())
         base_resource_count = resource_count if resource_count and resource_count > 0 else 0
         security_resource_count = max(base_resource_count, len(security_scoring_findings), 1)
@@ -340,51 +355,57 @@ class ReportGenerator:
             security_scoring_findings, security_max_score, 
             violations=len(security_findings), all_findings=security_findings
         )
-        
-        # Container security grading (aggregated by image)
-        # Use scoring_findings for severity breakdown to show container counts, not total vulnerabilities
+    else:
+        security_grade = None  # Mark as skipped scanner
+    
+    # Container security grading (aggregated by image)
+    if should_calc_container and container_findings:
+        max_severity_weight = max(self.calculator.severity_weights.values())
+        base_resource_count = resource_count if resource_count and resource_count > 0 else 0
         container_resource_count = max(base_resource_count, len(container_scoring_findings), 1)
         container_max_score = container_resource_count * max_severity_weight
         container_grade = self.calculator.calculate_grade_with_max(
             container_scoring_findings, container_max_score, 
             violations=len(container_scoring_findings), all_findings=container_scoring_findings
         )
-        
-        # Calculate overall grade
-        overall_grade = self._calculate_overall_grade(
-            cost_grade, security_grade, container_grade, cost_findings, security_findings, container_findings
-        )
-        
-        # Generate analysis
-        recommendations = self._generate_recommendations(
-            cost_grade, security_grade, container_grade, cost_findings, security_findings, container_findings
-        )
-        
-        # Add extra recommendations if provided
-        if extra_recommendations:
-            recommendations.extend(extra_recommendations)
-        
-        top_issues = self._identify_top_issues(findings)
-        
-        # Additional metrics (extensible)
-        metrics = self._calculate_additional_metrics(findings, resource_count)
-        
-        return ScanReport(
-            overall_grade=overall_grade,
-            cost_grade=cost_grade,
-            security_grade=security_grade,
-            container_grade=container_grade,
-            cost_findings=cost_findings,
-            security_findings=security_findings,
-            container_findings=container_findings,
-            all_findings=findings,
-            resource_count=resource_count,
-            scanner_type=scanner_type,
-            total_violations=len(findings),
-            recommendations=recommendations,
-            top_issues=top_issues,
-            metrics=metrics
-        )
+    else:
+        container_grade = None  # Mark as skipped scanner
+    
+    # Calculate overall grade (using only grades that exist)
+    overall_grade = self._calculate_overall_grade(
+        cost_grade, security_grade, container_grade, cost_findings, security_findings, container_findings
+    )
+    
+    # Generate analysis
+    recommendations = self._generate_recommendations(
+        cost_grade, security_grade, container_grade, cost_findings, security_findings, container_findings
+    )
+    
+    # Add extra recommendations if provided
+    if extra_recommendations:
+        recommendations.extend(extra_recommendations)
+    
+    top_issues = self._identify_top_issues(findings)
+    
+    # Additional metrics (extensible)
+    metrics = self._calculate_additional_metrics(findings, resource_count)
+    
+    return ScanReport(
+        overall_grade=overall_grade,
+        cost_grade=cost_grade,
+        security_grade=security_grade,
+        container_grade=container_grade,
+        cost_findings=cost_findings,
+        security_findings=security_findings,
+        container_findings=container_findings,
+        all_findings=findings,
+        resource_count=resource_count,
+        scanner_type=scanner_type,
+        total_violations=len(findings),
+        recommendations=recommendations,
+        top_issues=top_issues,
+        metrics=metrics
+    )
 
     def _most_severe_per_resource(self, findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Return only the most severe finding per resource."""
@@ -416,83 +437,84 @@ class ReportGenerator:
         return list(by_image.values())
 
     
-    def _calculate_overall_grade(self, cost_grade: GradeInfo, 
-                                security_grade: GradeInfo,
-                                container_grade: GradeInfo,
-                                cost_findings: List, 
-                                security_findings: List,
-                                container_findings: List) -> GradeInfo:
-        """Calculate overall grade from cost, security, and container grades."""
-        # Determine which scanners were used
-        scanners_used = []
-        if cost_findings:
-            scanners_used.append('cost')
-        if security_findings:
-            scanners_used.append('security')
-        if container_findings:
-            scanners_used.append('container')
-        
-        if not scanners_used:
-            overall_percentage = 100.0
-            combined_score = 0
-            max_combined = 0
-        elif len(scanners_used) == 1:
-            # Single scanner - use its grade directly
-            if 'cost' in scanners_used:
-                overall_percentage = cost_grade.percentage
-                combined_score = cost_grade.score
-                max_combined = cost_grade.max_score
-            elif 'security' in scanners_used:
-                overall_percentage = security_grade.percentage
-                combined_score = security_grade.score
-                max_combined = security_grade.max_score
-            else:
-                overall_percentage = container_grade.percentage
-                combined_score = container_grade.score
-                max_combined = container_grade.max_score
+  def _calculate_overall_grade(self, cost_grade: GradeInfo, 
+                            security_grade: GradeInfo,
+                            container_grade: GradeInfo,
+                            cost_findings: List, 
+                            security_findings: List,
+                            container_findings: List) -> GradeInfo:
+    """Calculate overall grade from cost, security, and container grades."""
+    # Determine which scanners actually produced grades
+    scanners_used = []
+    if cost_grade is not None:
+        scanners_used.append('cost')
+    if security_grade is not None:
+        scanners_used.append('security')
+    if container_grade is not None:
+        scanners_used.append('container')
+    
+    if not scanners_used:
+        overall_percentage = 100.0
+        combined_score = 0
+        max_combined = 0
+    elif len(scanners_used) == 1:
+        # Single scanner - use its grade directly
+        if 'cost' in scanners_used:
+            overall_percentage = cost_grade.percentage
+            combined_score = cost_grade.score
+            max_combined = cost_grade.max_score
+        elif 'security' in scanners_used:
+            overall_percentage = security_grade.percentage
+            combined_score = security_grade.score
+            max_combined = security_grade.max_score
         else:
-            # Multiple scanners - weighted average
-            total_weight = sum(SCORE_WEIGHTS[s] for s in scanners_used)
-            overall_percentage = sum(
-                (cost_grade.percentage if s == 'cost' else
-                 security_grade.percentage if s == 'security' else
-                 container_grade.percentage) * SCORE_WEIGHTS[s]
-                for s in scanners_used
-            ) / total_weight
-            combined_score = cost_grade.score + security_grade.score + container_grade.score
-            max_combined = cost_grade.max_score + security_grade.max_score + container_grade.max_score
-        
-        letter = self.calculator.get_letter_grade(overall_percentage)
-        
-        # Merge severity breakdowns
-        combined_breakdown = {
-            'critical': cost_grade.severity_breakdown['critical'] + security_grade.severity_breakdown['critical'] + container_grade.severity_breakdown['critical'],
-            'high': cost_grade.severity_breakdown['high'] + security_grade.severity_breakdown['high'] + container_grade.severity_breakdown['high'],
-            'medium': cost_grade.severity_breakdown['medium'] + security_grade.severity_breakdown['medium'] + container_grade.severity_breakdown['medium'],
-            'low': cost_grade.severity_breakdown['low'] + security_grade.severity_breakdown['low'] + container_grade.severity_breakdown['low'],
-            'info': cost_grade.severity_breakdown['info'] + security_grade.severity_breakdown['info'] + container_grade.severity_breakdown['info']
-        }
-        
-        return GradeInfo(
-            letter=letter,
-            percentage=round(overall_percentage, 1),
-            score=combined_score,
-            max_score=max_combined,
-            risk_level=RISK_LEVELS.get(letter, 'Unknown'),
-            violations=cost_grade.violations + security_grade.violations + container_grade.violations,
-            severity_breakdown=combined_breakdown
-        )
+            overall_percentage = container_grade.percentage
+            combined_score = container_grade.score
+            max_combined = container_grade.max_score
+    else:
+        # Multiple scanners - weighted average
+        total_weight = sum(SCORE_WEIGHTS[s] for s in scanners_used)
+        overall_percentage = sum(
+            (cost_grade.percentage if s == 'cost' and cost_grade else
+             security_grade.percentage if s == 'security' and security_grade else
+             container_grade.percentage if s == 'container' and container_grade else 0) * SCORE_WEIGHTS[s]
+            for s in scanners_used
+        ) / total_weight
+        combined_score = (cost_grade.score if cost_grade else 0) + (security_grade.score if security_grade else 0) + (container_grade.score if container_grade else 0)
+        max_combined = (cost_grade.max_score if cost_grade else 0) + (security_grade.max_score if security_grade else 0) + (container_grade.max_score if container_grade else 0)
+    
+    letter = self.calculator.get_letter_grade(overall_percentage)
+    
+    # Merge severity breakdowns (only from grades that exist)
+    combined_breakdown = {
+        'critical': (cost_grade.severity_breakdown['critical'] if cost_grade else 0) + (security_grade.severity_breakdown['critical'] if security_grade else 0) + (container_grade.severity_breakdown['critical'] if container_grade else 0),
+        'high': (cost_grade.severity_breakdown['high'] if cost_grade else 0) + (security_grade.severity_breakdown['high'] if security_grade else 0) + (container_grade.severity_breakdown['high'] if container_grade else 0),
+        'medium': (cost_grade.severity_breakdown['medium'] if cost_grade else 0) + (security_grade.severity_breakdown['medium'] if security_grade else 0) + (container_grade.severity_breakdown['medium'] if container_grade else 0),
+        'low': (cost_grade.severity_breakdown['low'] if cost_grade else 0) + (security_grade.severity_breakdown['low'] if security_grade else 0) + (container_grade.severity_breakdown['low'] if container_grade else 0),
+        'info': (cost_grade.severity_breakdown['info'] if cost_grade else 0) + (security_grade.severity_breakdown['info'] if security_grade else 0) + (container_grade.severity_breakdown['info'] if container_grade else 0)
+    }
+    
+    return GradeInfo(
+        letter=letter,
+        percentage=round(overall_percentage, 1),
+        score=combined_score,
+        max_score=max_combined,
+        risk_level=RISK_LEVELS.get(letter, 'Unknown'),
+        violations=(cost_grade.violations if cost_grade else 0) + (security_grade.violations if security_grade else 0) + (container_grade.violations if container_grade else 0),
+        severity_breakdown=combined_breakdown
+    )
     
     def _generate_recommendations(self, cost_grade: GradeInfo, 
-                                 security_grade: GradeInfo,
-                                 container_grade: GradeInfo,
-                                 cost_findings: List, 
-                                 security_findings: List,
-                                 container_findings: List) -> List[str]:
-        """Generate actionable recommendations - max 1 per category."""
-        recommendations = []
-        
-        # IaC Security - show most critical issue only
+                             security_grade: GradeInfo,
+                             container_grade: GradeInfo,
+                             cost_findings: List, 
+                             security_findings: List,
+                             container_findings: List) -> List[str]:
+    """Generate actionable recommendations - max 1 per category."""
+    recommendations = []
+    
+    # IaC Security - show most critical issue only
+    if security_grade is not None:
         iac_critical = security_grade.severity_breakdown.get('critical', 0)
         iac_high = security_grade.severity_breakdown['high']
         if iac_critical > 0:
@@ -505,8 +527,9 @@ class ReportGenerator:
                 f"🔒 Priority: Fix {iac_high} high-severity "
                 f"IaC security {'issue' if iac_high == 1 else 'issues'} before deployment"
             )
-        
-        # Container Security - show most critical issue only
+    
+    # Container Security - show most critical issue only
+    if container_grade is not None:
         container_critical = container_grade.severity_breakdown.get('critical', 0)
         container_high = container_grade.severity_breakdown['high']
         if container_critical > 0:
@@ -519,28 +542,30 @@ class ReportGenerator:
                 f"🐳 Priority: Address {container_high} {'image with' if container_high == 1 else 'images with'} high-severity "
                 f"vulnerabilities - update container images or patch affected packages"
             )
-        
-        # Cost - show only if high priority
-        if cost_grade.severity_breakdown['high'] > 0:
-            recommendations.append(
-                f"💰 Optimize {cost_grade.severity_breakdown['high']} high-cost "
-                f"{'issue' if cost_grade.severity_breakdown['high'] == 1 else 'issues'} for significant savings"
-            )
-        
-        # Overall assessment - max 1
-        worst_grade = min([cost_grade.letter, security_grade.letter, container_grade.letter])
+    
+    # Cost - show only if high priority
+    if cost_grade is not None and cost_grade.severity_breakdown['high'] > 0:
+        recommendations.append(
+            f"💰 Optimize {cost_grade.severity_breakdown['high']} high-cost "
+            f"{'issue' if cost_grade.severity_breakdown['high'] == 1 else 'issues'} for significant savings"
+        )
+    
+    # Overall assessment - max 1
+    grades = [g for g in [cost_grade, security_grade, container_grade] if g is not None]
+    if grades:
+        worst_grade = min([g.letter for g in grades])
         total_findings = len(cost_findings) + len(security_findings) + len(container_findings)
         
         if worst_grade in ['D', 'F']:
             recommendations.append(
                 "⚠️ Infrastructure needs improvement - consider professional review"
             )
-        elif cost_grade.letter == 'A' and security_grade.letter == 'A' and container_grade.letter == 'A' and total_findings > 0:
+        elif all(g.letter == 'A' for g in grades) and total_findings > 0:
             recommendations.append("✅ Excellent infrastructure health - maintain current practices")
         elif worst_grade in ['B', 'C']:
             recommendations.append("👍 Good foundation - address remaining issues for optimal results")
-        
-        return recommendations or ["✅ No significant issues found"]
+    
+    return recommendations or ["✅ No significant issues found"]
     
     def _identify_top_issues(self, findings: List[Dict[str, Any]], 
                            top_n: int = 5) -> List[Dict[str, Any]]:
