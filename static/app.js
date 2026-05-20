@@ -1417,28 +1417,14 @@ function initApp() {
             <div class="grade-report-section">
                 <h2 class="section-title">📊 Infrastructure Report Card</h2>
                 <div class="grade-cards-container">
-            ${gradeReport.overall &&
-              [gradeReport.cost, gradeReport.security, gradeReport.container]
-                .filter(Boolean).length > 1
-                ? renderGradeCard('Overall Grade', gradeReport.overall, '🎯')
-                : ''
-            }
-
-           ${gradeReport.cost
-             ? renderGradeCard('Cost Optimization', gradeReport.cost, '💰')
-            : ''
-            }
-
-            ${gradeReport.security
-            ? renderGradeCard('IaC Security', gradeReport.security, '🔒')
-            : ''
-            }
-
-            ${gradeReport.container
-            ? renderGradeCard('Container Security', gradeReport.container, '🐳')
-            : ''
-            }
-            </div>
+                    ${gradeReport.overall && [gradeReport.cost, gradeReport.security, gradeReport.container].filter(Boolean).length > 1
+                      ? renderGradeCard('Overall Grade', gradeReport.overall, '🎯')
+                      : ''
+                    }
+                    ${gradeReport.cost ? renderGradeCard('Cost Optimization', gradeReport.cost, '💰') : ''}
+                    ${gradeReport.security ? renderGradeCard('IaC Security', gradeReport.security, '🔒') : ''}
+                    ${gradeReport.container ? renderGradeCard('Container Security', gradeReport.container, '🐳') : ''}
+                </div>
                 ${recommendations.length > 0 ? `
                 <div class="recommendations-section">
                     <h3 class="recommendations-title">💡 Recommendations</h3>
