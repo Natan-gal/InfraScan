@@ -231,6 +231,15 @@ def scan_directory(path, scanner_type='regex', framework='terraform', download_e
         framework = detect_framework(path, files=resolved_files)
         print(f"Detected framework: {framework}")
 
+        if resolved_files:
+            print("Found files to scan:")
+            for file_path in sorted(resolved_files):
+                try:
+                    relative_path = os.path.relpath(file_path, path)
+                except ValueError:
+                    relative_path = file_path
+                print(f" - {relative_path}")
+
     # Count resources for reporting
     resource_count = count_resources(path, framework, files=resolved_files)
     
