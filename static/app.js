@@ -1410,20 +1410,18 @@ function initApp() {
                 </div>
             `;
         };
-
+        const singleScannerMode = gradeReport.metrics?.single_scanner_mode;
         const recommendations = gradeReport.analysis?.recommendations || [];
 
         return `
-            <div class="grade-report-section">
-                <h2 class="section-title">📊 Infrastructure Report Card</h2>
-                <div class="grade-cards-container">
-                    ${gradeReport.overall && [gradeReport.cost, gradeReport.security, gradeReport.container].filter(Boolean).length > 1
-                      ? renderGradeCard('Overall Grade', gradeReport.overall, '🎯')
-                      : ''
-                    }
-                    ${gradeReport.cost ? renderGradeCard('Cost Optimization', gradeReport.cost, '💰') : ''}
-                    ${gradeReport.security ? renderGradeCard('IaC Security', gradeReport.security, '🔒') : ''}
-                    ${gradeReport.container ? renderGradeCard('Container Security', gradeReport.container, '🐳') : ''}
+            <div class="grade-cards-container">
+                    ${!singleScannerMode && gradeReport.overall
+                        ? renderGradeCard('Overall Grade', gradeReport.overall, '🎯')
+                        : ''}
+                    
+                    ${renderGradeCard('Cost Optimization', gradeReport.cost, '💰')}
+                    ${renderGradeCard('IaC Security', gradeReport.security, '🔒')}
+                    ${renderGradeCard('Container Security', gradeReport.container, '🐳')}
                 </div>
                 ${recommendations.length > 0 ? `
                 <div class="recommendations-section">
@@ -1625,5 +1623,4 @@ function toggleCVE(cveId) {
     } else {
         details.style.display = 'none';
         if (icon) icon.textContent = '▼';
-    }
-}
+        }}
