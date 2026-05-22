@@ -6,6 +6,7 @@ with easy configuration for adding new metrics and scores.
 
 GRADING FORMULAS:
 
+
 Cost Grade:
   - Weighted Score = Σ(severity_weight × count) for all cost findings
   - Max Score = (resource_count + unique_rules) × max_severity_weight
