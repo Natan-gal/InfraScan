@@ -248,13 +248,18 @@ def should_fail(args, report_dict, results):
         return False
 
     if args.fail_on == 'any' and len(results) > 0:
-        print("\n[ERROR] Build failed: Findings detected and --fail-on=any specified.", file=sys.stderr)
+        logger.error(
+            "Build failed: Findings detected and --fail-on=any specified."
+        )
         return True
 
     if args.fail_on == 'high_critical':
         critical_high_count = sum(1 for r in results if r.get('severity', '').lower() in ['critical', 'high'])
         if critical_high_count > 0:
-            print(f"\n[ERROR] Build failed: {critical_high_count} high/critical findings detected and --fail-on=high_critical specified.", file=sys.stderr)
+            logger.error(
+                f"Build failed: {critical_high_count} high/critical findings "
+                f"detected and --fail-on=high_critical specified."
+            )
             return True
 
     if args.fail_on.startswith('grade_'):
@@ -267,7 +272,11 @@ def should_fail(args, report_dict, results):
             current_idx = grade_order.index(overall_letter)
 
             if current_idx >= fail_idx:
-                print(f"\n[ERROR] Build failed: Overall grade is {overall_letter} and --fail-on={args.fail_on} specified (threshold: {fail_grade} or worse).", file=sys.stderr)
+                logger.error(
+                    f"Build failed: Overall grade is {overall_letter} "
+                    f"and --fail-on={args.fail_on} specified "
+                    f"(threshold: {fail_grade} or worse)."
+                )
                 return True
         except ValueError:
             pass # Should not happen due to argparse choices
@@ -283,13 +292,17 @@ def should_fail(args, report_dict, results):
         ]
 
         if findings_at_or_above:
-            print(f"\n[ERROR] Build failed: {len(findings_at_or_above)} findings with priority {fail_priority} or higher detected and --fail-on={args.fail_on} specified.", file=sys.stderr)
+            logger.error(
+                f"Build failed: {len(findings_at_or_above)} findings "
+                f"with priority {fail_priority} or higher detected "
+                f"and --fail-on={args.fail_on} specified."
+            )
             return True
 
     return False
 
 def main():
-    total_start = time.time()
+    total_start = time.perf_counter()
 
     load_dotenv()
     args = setup_args()
@@ -309,7 +322,7 @@ def main():
         # Run Scanners
         logger.info("Starting directory scan")
         
-        scan_start = time.time()
+        scan_start = time.perf_counter()
         
         results, resource_count, recommendations = scan_directory(
             target_path,
@@ -319,7 +332,7 @@ def main():
             included_paths=args.include
         )
         
-        scan_duration = time.time() - scan_start
+        scan_duration = time.perf_counter() - scan_start
         
         logger.info(
             f"Directory scan completed in {scan_duration:.2f}s. "
@@ -329,7 +342,7 @@ def main():
         # Generate Report
         logger.info("Generating report")
 
-        report_start = time.time()
+        report_start = time.perf_counter()
 
         report_generator = ReportGenerator()
         report = report_generator.generate_report(
@@ -339,7 +352,7 @@ def main():
             extra_recommendations=recommendations
         )
 
-        report_duration = time.time() - report_start
+        report_duration = time.perf_counter() - report_start
 
         logger.info(
             f"Report generation completed in {report_duration:.2f}s"
@@ -356,13 +369,13 @@ def main():
         if args.out:
             logger.info(f"Saving report to {args.out}")
         
-            save_start = time.time()
+            save_start = time.perf_counter()
 
             if args.format == 'json':
                 with open(args.out, 'w') as f:
                     json.dump(report_dict, f, indent=2)
                 
-                save_duration = time.time() - save_start
+                save_duration = time.perf_counter() - save_start
                 
                 logger.info(
                     f"Report saved in {save_duration:.2f}s"
@@ -393,7 +406,7 @@ def main():
         if webhook_url:
             logger.info("Sending Slack notification")
 
-            slack_start = time.time()
+            slack_start = time.perf_counter()
 
             overall = report_dict.get('overall', {})
             cost = report_dict.get('cost', {})
@@ -401,8 +414,8 @@ def main():
             container = report_dict.get('container', {})
 
             total_findings = len(results)
-            overall_grade = overall.get('letter', '?')
-            overall_pct = overall.get('percentage', 0)
+            overall_grade = overall.get('letter', '?') if overall else '?'
+            overall_pct = overall.get('percentage', 0) if overall else 0
 
             grades_parts = [f"Overall {overall_grade} ({overall_pct}%)"]
 
@@ -445,7 +458,7 @@ def main():
                 lines.append(f"<{ctx['run_url']}|View run>")
 
             send_slack_notification(" | ".join(lines))
-            slack_duration = time.time() - slack_start
+            slack_duration = time.perf_counter() - slack_start
 
             logger.info(
                 f"Slack notification sent in {slack_duration:.2f}s"
@@ -457,7 +470,7 @@ def main():
         if should_fail(args, report_dict, results):
             sys.exit(1)
 
-        total_duration = time.time() - total_start
+        total_duration = time.perf_counter() - total_start
 
         logger.info(
             f"InfraScan completed successfully in "
@@ -476,4 +489,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
