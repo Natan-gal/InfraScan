@@ -1414,26 +1414,30 @@ function initApp() {
         const recommendations = gradeReport.analysis?.recommendations || [];
 
         return `
-            <div class="grade-cards-container">
-                    ${!singleScannerMode && gradeReport.overall
-                        ? renderGradeCard('Overall Grade', gradeReport.overall, '🎯')
-                        : ''}
-                    
-                    ${renderGradeCard('Cost Optimization', gradeReport.cost, '💰')}
-                    ${renderGradeCard('IaC Security', gradeReport.security, '🔒')}
-                    ${renderGradeCard('Container Security', gradeReport.container, '🐳')}
-                </div>
-                ${recommendations.length > 0 ? `
-                <div class="recommendations-section">
-                    <h3 class="recommendations-title">💡 Recommendations</h3>
-                    <ul class="recommendations-list">
-                        ${recommendations.map(rec => `<li>${escapeHtml(rec)}</li>`).join('')}
-                    </ul>
-                </div>
-                ` : ''}
-            </div>
-        `;
-    }
+           <div class="grade-report-section">
+               <h2 class="section-title">📊 Infrastructure Health Report</h2>
+
+               <div class="grade-cards-container">
+                   ${!singleScannerMode && gradeReport.overall
+                       ? renderGradeCard('Overall Grade', gradeReport.overall, '🎯')
+                       : ''}
+
+                   ${renderGradeCard('Cost Optimization', gradeReport.cost, '💰')}
+                   ${renderGradeCard('IaC Security', gradeReport.security, '🔒')}
+                   ${renderGradeCard('Container Security', gradeReport.container, '🐳')}
+               </div>
+
+               ${recommendations.length > 0 ? `
+               <div class="recommendations-section">
+                   <h3 class="recommendations-title">💡 Recommendations</h3>
+                   <ul class="recommendations-list">
+                       ${recommendations.map(rec => `<li>${escapeHtml(rec)}</li>`).join('')}
+                   </ul>
+               </div>
+               ` : ''}
+           </div>
+`       ;
+}
 
     submitFeedbackBtn.addEventListener('click', async () => {
         const review = feedbackReview.value.trim();
