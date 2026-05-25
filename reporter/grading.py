@@ -588,7 +588,7 @@ class ReportGenerator:
             if g
         ]
 
-        worst_grade = min(available_letters) if available_letters else 'A'
+        worst_grade = max(available_letters) if available_letters else 'A'
         total_findings = len(cost_findings) + len(security_findings) + len(container_findings)
         
         if worst_grade in ['D', 'F']:
@@ -596,10 +596,10 @@ class ReportGenerator:
                 "⚠️ Infrastructure needs improvement - consider professional review"
             )
         elif all(
-            g and g.letter == 'A'
+            g.letter == 'A'
             for g in [cost_grade, security_grade, container_grade]
             if g
-        ) and total_findings > 0: 
+        ) and total_findings > 0:
             recommendations.append("✅ Excellent infrastructure health - maintain current practices")
         elif worst_grade in ['B', 'C']:
             recommendations.append("👍 Good foundation - address remaining issues for optimal results")
