@@ -5,6 +5,7 @@ import argparse
 import json
 import logging
 import requests
+import time
 try:
     from colorama import Fore, Style, init
 except ImportError:
@@ -21,11 +22,13 @@ from reporter.html_generator import generate_standalone_html
 
 __version__ = "1.0.6"
 
-# Setup basic logging
+# Setup logging with timestamps
 logging.basicConfig(
     level=logging.INFO,
     format='[%(asctime)s] %(levelname)s: %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    datefmt='%Y-%m-%d %H:%M:%S',
+    stream=sys.stdout,
+    force=True
 )
 
 logger = logging.getLogger(__name__)
@@ -105,7 +108,7 @@ def setup_args():
     parser.add_argument(
         "--framework",
         default="auto",
-        choices=["auto", "terraform", "kubernetes", "cloudformation", "helm"],
+        choices=["auto", "terraform", "kubernetes", "cloudformation", "helm", "all"],
         help="IaC framework type (default: auto-detect)"
     )
 
@@ -286,6 +289,8 @@ def should_fail(args, report_dict, results):
     return False
 
 def main():
+    total_start = time.time()
+
     load_dotenv()
     args = setup_args()
 
@@ -303,7 +308,9 @@ def main():
 
         # Run Scanners
         logger.info("Starting directory scan")
-
+        
+        scan_start = time.time()
+        
         results, resource_count, recommendations = scan_directory(
             target_path,
             scanner_type=args.scanner,
@@ -311,14 +318,18 @@ def main():
             download_external_modules=args.download_external_modules,
             included_paths=args.include
         )
-
+        
+        scan_duration = time.time() - scan_start
+        
         logger.info(
-            f"Directory scan completed. Found {len(results)} findings "
-            f"in {resource_count} resources."
+            f"Directory scan completed in {scan_duration:.2f}s. "
+            f"Found {len(results)} findings in {resource_count} resources."
         )
 
         # Generate Report
         logger.info("Generating report")
+
+        report_start = time.time()
 
         report_generator = ReportGenerator()
         report = report_generator.generate_report(
@@ -328,7 +339,11 @@ def main():
             extra_recommendations=recommendations
         )
 
-        logger.info("Report generation completed")
+        report_duration = time.time() - report_start
+
+        logger.info(
+            f"Report generation completed in {report_duration:.2f}s"
+        )
 
         report_dict = report.to_dict()
         report_dict['results'] = results
@@ -340,10 +355,18 @@ def main():
         # Output Results to file/stdout
         if args.out:
             logger.info(f"Saving report to {args.out}")
+        
+            save_start = time.time()
 
             if args.format == 'json':
                 with open(args.out, 'w') as f:
                     json.dump(report_dict, f, indent=2)
+                
+                save_duration = time.time() - save_start
+                
+                logger.info(
+                    f"Report saved in {save_duration:.2f}s"
+                )
             elif args.format == 'html':
                 html_output = generate_standalone_html(report_dict)
                 with open(args.out, 'w', encoding='utf-8') as f:
@@ -369,6 +392,8 @@ def main():
         webhook_url = os.getenv('SLACK_WEBHOOK_URL', '').strip()
         if webhook_url:
             logger.info("Sending Slack notification")
+
+            slack_start = time.time()
 
             overall = report_dict.get('overall', {})
             cost = report_dict.get('cost', {})
@@ -420,6 +445,11 @@ def main():
                 lines.append(f"<{ctx['run_url']}|View run>")
 
             send_slack_notification(" | ".join(lines))
+            slack_duration = time.time() - slack_start
+
+            logger.info(
+                f"Slack notification sent in {slack_duration:.2f}s"
+            )
 
         # Determine Exit Code
         logger.info("Evaluating fail conditions")
@@ -427,11 +457,16 @@ def main():
         if should_fail(args, report_dict, results):
             sys.exit(1)
 
-        logger.info("InfraScan completed successfully")
+        total_duration = time.time() - total_start
+
+        logger.info(
+            f"InfraScan completed successfully in "
+            f"{total_duration:.2f}s"
+        )
         sys.exit(0)
 
     except Exception as e:
-        logger.error(f"ERROR: {e}")
+        logger.exception(f"An error occurred during scanning: {e}")
 
         if logging.getLogger().isEnabledFor(logging.DEBUG):
             import traceback
@@ -441,3 +476,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
