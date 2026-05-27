@@ -149,6 +149,10 @@ def get_branches():
             
         return jsonify({'branches': branches})
     except Exception as e:
+        error_msg = str(e).lower()
+        if 'could not read' in error_msg or 'not found' in error_msg or 'does not exist' in error_msg:
+            return jsonify({'error': 'Unable to access repository. Please verify the URL.'}), 400
+        return jsonify({'error': f'Failed to fetch branches: {str(e)}'}), 500
         print(f"Error: {e}")
 
     return jsonify({
@@ -338,6 +342,19 @@ def scan_github():
         
         return jsonify(report_dict)
     except Exception as e:
+        # User-friendly error message without exposing technical details
+        error_msg = str(e).lower()
+        if 'could not read' in error_msg or 'not found' in error_msg or 'does not exist' in error_msg:
+            return jsonify({
+                'error': 'Unable to access repository. Please verify the URL format (https://github.com/username/repo) and ensure the repository is public.'
+            }), 400
+        else:
+            return jsonify({
+                'error': 'Unable to process repository. Please check the URL and try again.'
+            }), 500
+    finally:
+        # Clean up
+        shutil.rmtree(temp_dir, ignore_errors=True)
         print(f"Error: {e}")
 
     return jsonify({
