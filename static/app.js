@@ -86,7 +86,8 @@ function initApp() {
             cost: data.cost,
             security: data.security,
             container: data.container,
-            analysis: data.analysis
+            analysis: data.analysis,
+            metrics: data.metrics
         };
 
         currentResults = data.results;
@@ -253,7 +254,8 @@ function initApp() {
                         cost: data.cost,
                         security: data.security,
                         container: data.container,
-                        analysis: data.analysis
+                        analysis: data.analysis,
+                        metrics: data.metrics
                     };
                 }
 
@@ -642,7 +644,8 @@ function initApp() {
                 cost: data.cost,
                 security: data.security,
                 container: data.container,
-                analysis: data.analysis
+                analysis: data.analysis,
+                metrics: data.metrics
             };
 
             displayResults(data.results, data.summary, data.metadata, currentGradeReport);
