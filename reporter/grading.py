@@ -134,7 +134,7 @@ class ScanReport:
     def to_dict(self) -> Dict:
         """Convert to dictionary for JSON serialization."""
         return {
-       'overall': self.overall_grade.to_dict() if self.overall_grade else None,
+        'overall': self.overall_grade.to_dict() if self.overall_grade else None,
         'cost': self.cost_grade.to_dict() if self.cost_grade else None,
         'security': self.security_grade.to_dict() if self.security_grade else None,
         'container': self.container_grade.to_dict() if self.container_grade else None,
