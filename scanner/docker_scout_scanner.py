@@ -268,6 +268,7 @@ def run_docker_scout_scan(directory_path: str, files: List[str] = None) -> Tuple
     findings = []
     extra_recommendations = []
     auth_failed = False
+    scanned_images = set()  # Cache to avoid scanning same image multiple times
     images_to_cleanup = set()  # Track images pulled during scan for cleanup
     
     # Check if cleanup is enabled (default: yes)
@@ -280,6 +281,8 @@ def run_docker_scout_scan(directory_path: str, files: List[str] = None) -> Tuple
         compose_files = find_compose_files(directory_path)
         # Find Kubernetes files
         k8s_files = find_kubernetes_files(directory_path)
+    if not compose_files and not k8s_files:
+        return findings, extra_recommendations, False
     
     if compose_files:
         print("[INFO] Found Docker Compose files:")
